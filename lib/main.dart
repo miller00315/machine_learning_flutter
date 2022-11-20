@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image_picker/image_picker.dart';
 
 void main() {
@@ -33,8 +34,29 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final ImagePicker _picker = ImagePicker();
+  late ImagePicker _picker;
+  late ImageLabeler _imageLabeler;
+  List<ImageLabel>? _labels;
+
   File? _image;
+
+  @override
+  void initState() {
+    super.initState();
+    _picker = ImagePicker();
+
+    ImageLabelerOptions options = ImageLabelerOptions(confidenceThreshold: 0.5);
+
+    _imageLabeler = ImageLabeler(options: options);
+
+    _labels = <ImageLabel>[];
+  }
+
+  @override
+  void dispose() {
+    _imageLabeler.close();
+    super.dispose();
+  }
 
   chooseImages() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
@@ -60,7 +82,19 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  doImageLabeling() {}
+  doImageLabeling() async {
+    if (_image != null) {
+      InputImage inputImage = InputImage.fromFile(_image!);
+
+      if (_labels?.isNotEmpty ?? false) _labels?.clear();
+
+      final newLabels = await _imageLabeler.processImage(inputImage);
+
+      setState(() {
+        _labels = newLabels;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,30 +104,51 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            _image != null
-                ? SizedBox(
-                    width: 200,
-                    height: 300,
-                    child: Image.file(
-                      _image!,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : const Icon(
-                    Icons.image,
-                    size: 158,
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          _image != null
+              ? SizedBox(
+                  width: 200,
+                  height: 300,
+                  child: Image.file(
+                    _image!,
+                    fit: BoxFit.cover,
                   ),
-            ElevatedButton(
-              onPressed: chooseImages,
-              onLongPress: captureImages,
-              child: const Text('Choose os capture'),
-            )
-          ],
-        ),
+                )
+              : const Icon(
+                  Icons.image,
+                  size: 158,
+                ),
+          const SizedBox(
+            height: 16,
+          ),
+          ElevatedButton(
+            onPressed: chooseImages,
+            onLongPress: captureImages,
+            child: const Text('Choose os capture'),
+          ),
+          Expanded(
+            child: ListView(
+              children: [
+                if (_labels?.isNotEmpty ?? false)
+                  ..._labels!
+                      .map(
+                        (e) => Container(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            '${e.label}, ${e.index}, ${e.confidence.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList()
+              ],
+            ),
+          )
+        ],
       ),
       // This trailing comma makes auto-formatting nicer for build methods.
     );
